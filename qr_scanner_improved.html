@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Absensi QR Code</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        
+        #reader {
+            width: 100%;
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .result-box {
+            background: #f7f7f7;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .result-box.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            display: block;
+        }
+        
+        .result-box.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            display: block;
+        }
+        
+        .result-box.warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            display: block;
+        }
+        
+        .result-box h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .info-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .info-value {
+            color: #333;
+        }
+        
+        .timestamp {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .status.scanning {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status.stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .history {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .history h4 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .history-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item.success {
+            border-left: 4px solid #28a745;
+        }
+
+        .history-item.duplicate {
+            border-left: 4px solid #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Scanner Absensi</h1>
+        
+        <div id="status" class="status scanning">Siap untuk scan QR Code</div>
+        
+        <div id="reader"></div>
+        
+        <button id="startBtn" onclick="startScanning()">🎥 Mulai Scan</button>
+        <button id="stopBtn" onclick="stopScanning()" style="display:none; background:#dc3545;">⏹️ Stop Scan</button>
+        
+        <div id="result" class="result-box"></div>
+
+        <div class="history" id="history" style="display:none;">
+            <h4>Riwayat Scan Hari Ini</h4>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <!-- Library QR Code Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <script>
+        // KONFIGURASI - GANTI URL INI DENGAN WEB APP URL ANDA
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyV7XaMPQysDeokmnmIsdGzQ1hDEYxImtacEdEehOSoV8jHrma0xhLjD8f6Zgy4Vh_H/exec';
+        
+        let html5QrCode;
+        let isScanning = false;
+        let scannedToday = [];
+        
+        // Load riwayat dari localStorage
+        function loadHistory() {
+            const today = new Date().toLocaleDateString('id-ID');
+            const savedHistory = localStorage.getItem('attendance_history');
+            
+            if (savedHistory) {
+                const history = JSON.parse(savedHistory);
+                if (history.date === today) {
+                    scannedToday = history.scans || [];
+                } else {
+                    // Reset jika hari berbeda
+                    scannedToday = [];
+                    localStorage.removeItem('attendance_history');
+                }
+            }
+            
+            updateHistoryDisplay();
+        }
+        
+        // Simpan riwayat ke localStorage
+        function saveHistory() {
+            const today = new Date().toLocaleDateString('id-ID');
+            localStorage.setItem('attendance_history', JSON.stringify({
+                date: today,
+                scans: scannedToday
+            }));
+        }
+        
+        // Update tampilan riwayat
+        function updateHistoryDisplay() {
+            const historyDiv = document.getElementById('history');
+            const historyList = document.getElementById('historyList');
+            
+            if (scannedToday.length > 0) {
+                historyDiv.style.display = 'block';
+                historyList.innerHTML = scannedToday.map(item => `
+                    <div class="history-item ${item.isDuplicate ? 'duplicate' : 'success'}">
+                        <span>${item.nama}</span>
+                        <span style="font-size:12px; color:#666;">${item.time}</span>
+                    </div>
+                `).reverse().join('');
+            } else {
+                historyDiv.style.display = 'none';
+            }
+        }
+        
+        // Cek apakah sudah absen hari ini
+        function isAlreadyScanned(id) {
+            return scannedToday.some(item => item.id === id);
+        }
+        
+        function startScanning() {
+            const config = { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
+            };
+            
+            html5QrCode = new Html5Qrcode("reader");
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanError
+            ).then(() => {
+                isScanning = true;
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'block';
+                updateStatus('📸 Scanning... arahkan ke QR Code', 'scanning');
+            }).catch(err => {
+                alert('Gagal memulai kamera: ' + err);
+            });
+        }
+        
+        function stopScanning() {
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().then(() => {
+                    isScanning = false;
+                    document.getElementById('startBtn').style.display = 'block';
+                    document.getElementById('stopBtn').style.display = 'none';
+                    updateStatus('Scanner dihentikan', 'stopped');
+                });
+            }
+        }
+        
+        function onScanSuccess(decodedText, decodedResult) {
+            // Stop scanning setelah sukses
+            stopScanning();
+            
+            try {
+                // Parse QR Code data (JSON format)
+                const data = JSON.parse(decodedText);
+                
+                // Validasi data
+                if (data.id && data.nama && data.kelas) {
+                    // Cek apakah sudah pernah scan hari ini
+                    const isDuplicate = isAlreadyScanned(data.id);
+                    
+                    if (isDuplicate) {
+                        displayResult(data, true, true);
+                    } else {
+                        displayResult(data, true, false);
+                        recordAttendance(data);
+                    }
+                } else {
+                    throw new Error('Format QR Code tidak valid');
+                }
+            } catch (error) {
+                // Jika bukan JSON, tampilkan sebagai teks biasa
+                displayResult({ raw: decodedText }, false, false);
+            }
+        }
+        
+        function onScanError(errorMessage) {
+            // Abaikan error scan yang normal (tidak menemukan QR code)
+        }
+        
+        function displayResult(data, isValid, isDuplicate) {
+            const resultDiv = document.getElementById('result');
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('id-ID');
+            
+            if (isValid && !isDuplicate) {
+                resultDiv.className = 'result-box success';
+                resultDiv.innerHTML = `
+                    <h3>✅ Absensi Berhasil!</h3>
+                    <div class="info-item">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value">${data.id}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Nama:</span>
+                        <span class="info-value">${data.nama}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Kelas:</span>
+                        <span class="info-value">${data.kelas}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">No HP:</span>
+                        <span class="info-value">${data.noHP || '-'}</span>
+                    </div>
+                    <div class="timestamp">
+                        ⏰ ${timeString} - ${now.toLocaleDateString('id-ID')}
+                    </div>
+                `;
+            } else if (isValid && isDuplicate) {
+                resultDiv.className = 'result-box warning';
+                const previousScan = scannedToday.find(item => item.id === data.id);
+                resultDiv.innerHTML = `
+                    <h3>⚠️ Sudah Terabsen!</h3>
+                    <div class="info-item">
+                        <span class="info-label">Nama:</span>
+                        <span class="info-value">${data.nama}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Kelas:</span>
+                        <span class="info-value">${data.kelas}</span>
+                    </div>
+                    <div class="timestamp">
+                        📋 Sudah absen pada: ${previousScan.time}<br>
+                        Tidak perlu scan lagi hari ini.
+                    </div>
+                `;
+            } else {
+                resultDiv.className = 'result-box error';
+                resultDiv.innerHTML = `
+                    <h3>❌ QR Code Tidak Valid</h3>
+                    <p>Data yang terbaca: ${data.raw}</p>
+                    <p>Pastikan Anda scan QR Code yang benar dari sistem absensi.</p>
+                `;
+            }
+        }
+        
+        function updateStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+        
+        function recordAttendance(data) {
+            // Tampilkan loading
+            updateStatus('⏳ Menyimpan data...', 'loading');
+            
+            const now = new Date();
+            const attendanceData = {
+                id: data.id,
+                nama: data.nama,
+                kelas: data.kelas,
+                noHP: data.noHP,
+                waktuAbsen: now.toLocaleString('id-ID'),
+                tanggal: now.toLocaleDateString('id-ID'),
+                jam: now.toLocaleTimeString('id-ID')
+            };
+            
+            // Kirim ke Google Apps Script
+            fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Penting untuk Google Apps Script
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(attendanceData)
+            })
+            .then(() => {
+                // Karena no-cors, kita tidak bisa baca response
+                // Anggap sukses jika tidak ada error
+                
+                // Simpan ke riwayat lokal
+                scannedToday.push({
+                    id: data.id,
+                    nama: data.nama,
+                    time: now.toLocaleTimeString('id-ID'),
+                    isDuplicate: false
+                });
+                saveHistory();
+                updateHistoryDisplay();
+                
+                updateStatus('✅ Data tersimpan!', 'scanning');
+                
+                console.log('Absensi tercatat:', attendanceData);
+            })
+            .catch(error => {
+                console.error('Error mencatat absensi:', error);
+                updateStatus('⚠️ Gagal menyimpan, coba lagi', 'stopped');
+                
+                // Tetap simpan ke riwayat lokal
+                scannedToday.push({
+                    id: data.id,
+                    nama: data.nama,
+                    time: now.toLocaleTimeString('id-ID'),
+                    isDuplicate: false
+                });
+                saveHistory();
+                updateHistoryDisplay();
+            });
+        }
+        
+        // Load history saat halaman dimuat
+        window.onload = function() {
+            loadHistory();
+        };
+    </script>
+</body>
+</html>
