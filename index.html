@@ -324,7 +324,7 @@
                 const data = JSON.parse(decodedText);
                 
                 // Validasi data
-                if (data.id && data.nama && data.kelas) {
+                if (data.id && data.nama) {
                     // Cek apakah sudah pernah scan hari ini
                     const isDuplicate = isAlreadyScanned(data.id);
                     
@@ -363,14 +363,6 @@
                     <div class="info-item">
                         <span class="info-label">Nama:</span>
                         <span class="info-value">${data.nama}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">Kelas:</span>
-                        <span class="info-value">${data.kelas}</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">No HP:</span>
-                        <span class="info-value">${data.noHP || '-'}</span>
                     </div>
                     <div class="timestamp">
                         ⏰ ${timeString} - ${now.toLocaleDateString('id-ID')}
